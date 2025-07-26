@@ -1,0 +1,33 @@
+{
+  "name": "notification-service",
+  "version": "1.0.0",
+  "main": "dist/server.js",
+  "scripts": {
+    "start": "node dist/server.js",
+    "dev": "nodemon src/server.ts",
+    "build": "tsc",
+    "test": "jest",
+    "replay-dlq": "node dist/utils/dlq-replay.js"
+  },
+  "dependencies": {
+    "@ecommerce/event-types": "file:../../packages/event-types",
+    "@types/express": "^5.0.3",
+    "amqplib": "^0.10.3",
+    "dotenv": "^16.0.3",
+    "express": "^5.1.0",
+    "mongoose": "^8.16.5",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^18.15.11",
+    "@types/supertest": "^6.0.3",
+    "jest": "^30.0.5",
+    "nodemon": "^2.0.22",
+    "supertest": "^7.1.4",
+    "ts-jest": "^29.4.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.4"
+  }
+}
