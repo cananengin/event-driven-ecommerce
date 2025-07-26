@@ -1,6 +1,6 @@
 import { channel, EXCHANGE_NAME } from '../rabbitmq';
 import { v4 as uuidv4 } from 'uuid';
-import { OrderCreatedEvent, OrderStatusUpdatedEvent } from '@ecommerce/event-types';
+import { OrderCreatedEvent, OrderStatusUpdatedEvent, OrderCancelledEvent } from '@ecommerce/event-types';
 import { IOrder } from '../models/order.model';
 
 export function publishOrderCreated(order: IOrder) {
@@ -23,4 +23,22 @@ export function publishOrderStatusUpdated(orderId: string, status: 'CONFIRMED' |
   };
   channel.publish(EXCHANGE_NAME, 'order.status.updated', Buffer.from(JSON.stringify(event)));
   console.log(`[x] Sent order.status.updated: '${event.eventId}' for order ${orderId}`);
+}
+
+export function publishOrderCancelled(order: IOrder, reason?: string) {
+  const event: OrderCancelledEvent = {
+    eventId: uuidv4(),
+    version: '1.0',
+    source: 'order-service',
+    timestamp: new Date().toISOString(),
+    type: 'order.cancelled',
+    payload: {
+      orderId: order._id.toString(),
+      userId: order.userId,
+      products: order.products,
+      reason,
+    },
+  };
+  channel.publish(EXCHANGE_NAME, 'order.cancelled', Buffer.from(JSON.stringify(event)));
+  console.log(`[x] Sent order.cancelled: '${event.eventId}' for order ${order._id}`);
 }

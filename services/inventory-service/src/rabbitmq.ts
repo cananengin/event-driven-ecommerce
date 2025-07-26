@@ -1,9 +1,11 @@
 import amqp, { Channel, ChannelModel, ConsumeMessage } from 'amqplib';
 import { config } from './config';
-import { handleOrderCreated } from './events/consumers';
+import { handleOrderCreated, handleOrderCancelled } from './events/consumers';
 
 export const EXCHANGE_NAME = 'ecommerce_events';
 const ORDER_CREATED_ROUTING_KEY = 'order.created';
+const ORDER_CANCELLED_ROUTING_KEY = 'order.cancelled';
+const INVENTORY_QUEUE = 'inventory_main_queue';
 
 export let channel: Channel;
 
@@ -19,13 +21,19 @@ export async function connectRabbitMQ(retries = 10, backoffMs = 3000) {
       console.log('Inventory Service: RabbitMQ connected');
 
       await channel.assertExchange(EXCHANGE_NAME, 'topic', { durable: true });
-      // Listen for order.created events
-      const queue = await channel.assertQueue('', { exclusive: true });
-      await channel.bindQueue(queue.queue, EXCHANGE_NAME, ORDER_CREATED_ROUTING_KEY);
+      // Use a persistent queue for inventory service
+      await channel.assertQueue(INVENTORY_QUEUE, { durable: true });
+      await channel.bindQueue(INVENTORY_QUEUE, EXCHANGE_NAME, ORDER_CREATED_ROUTING_KEY);
+      await channel.bindQueue(INVENTORY_QUEUE, EXCHANGE_NAME, ORDER_CANCELLED_ROUTING_KEY);
 
-      channel.consume(queue.queue, async (msg: ConsumeMessage | null) => {
+      channel.consume(INVENTORY_QUEUE, async (msg: ConsumeMessage | null) => {
         if (msg) {
-          await handleOrderCreated(msg);
+          const routingKey = msg.fields.routingKey;
+          if (routingKey === ORDER_CREATED_ROUTING_KEY) {
+            await handleOrderCreated(msg);
+          } else if (routingKey === ORDER_CANCELLED_ROUTING_KEY) {
+            await handleOrderCancelled(msg);
+          }
           channel.ack(msg);
         }
       });

@@ -85,15 +85,15 @@ export class NotificationService {
   /**
    * Send a custom notification
    */
-  async sendCustomNotification(recipient: string, subject: string, message: string): Promise<NotificationResult> {
+  async sendCustomNotification(recipient: string, subject: string, message: string, type: 'email' | 'sms' | 'push' = 'email'): Promise<NotificationResult> {
     try {
-      // Validate recipient
-      if (!this.isValidRecipient(recipient)) {
-        throw new InvalidRecipientError(recipient, 'email');
+      // Validate recipient based on type
+      if (!this.isValidRecipient(recipient, type)) {
+        throw new InvalidRecipientError(recipient, type);
       }
 
       // In a real implementation, this would integrate with email/SMS services
-      console.log(`[Custom Notification] To: ${recipient}, Subject: ${subject}, Message: ${message}`);
+      console.log(`[Custom Notification] Type: ${type}, To: ${recipient}, Subject: ${subject}, Message: ${message}`);
       
       return {
         success: true,
@@ -110,18 +110,34 @@ export class NotificationService {
       
       throw ErrorFactory.notification('Failed to send custom notification', { 
         recipient, 
-        subject, 
+        subject,
+        type,
         error: error instanceof Error ? error.message : String(error) 
       });
     }
   }
 
   /**
-   * Validate recipient format
+   * Validate recipient format based on notification type
    */
-  private isValidRecipient(recipient: string): boolean {
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(recipient);
+  private isValidRecipient(recipient: string, type: 'email' | 'sms' | 'push'): boolean {
+    switch (type) {
+      case 'email':
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(recipient);
+      
+      case 'sms':
+        // Basic phone number validation (international format)
+        const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+        return phoneRegex.test(recipient.replace(/[\s\-\(\)]/g, ''));
+      
+      case 'push':
+        // For push notifications, recipient could be device token, user ID, etc.
+        // For now, accept any non-empty string
+        return Boolean(recipient && recipient.trim().length > 0);
+      
+      default:
+        return false;
+    }
   }
 } 

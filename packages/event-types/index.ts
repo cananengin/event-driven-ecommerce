@@ -33,7 +33,21 @@ export interface OrderStatusUpdatedEvent extends BaseEvent {
   };
 }
 
-export type AppEvent = OrderCreatedEvent | InventoryStatusUpdatedEvent | OrderStatusUpdatedEvent;
+export interface OrderCancelledEvent extends BaseEvent {
+  type: 'order.cancelled';
+  payload: {
+    orderId: string;
+    userId: string;
+    products: { productId: string; quantity: number }[];
+    reason?: string;
+  };
+}
+
+export type AppEvent =
+  | OrderCreatedEvent
+  | InventoryStatusUpdatedEvent
+  | OrderStatusUpdatedEvent
+  | OrderCancelledEvent;
 
 // Export error classes
 export * from './errors';

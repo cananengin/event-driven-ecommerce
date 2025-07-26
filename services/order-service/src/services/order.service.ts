@@ -1,6 +1,14 @@
 import { Order, IOrder } from '../models/order.model';
 import { ProcessedEvent } from '../models/processed-event.model';
-import { OrderCreatedEvent, InventoryStatusUpdatedEvent, OrderNotFoundError, OrderCancellationError, EventAlreadyProcessedError, ErrorFactory } from '@ecommerce/event-types';
+import { 
+  OrderCreatedEvent, 
+  InventoryStatusUpdatedEvent, 
+  OrderNotFoundError, 
+  OrderCancellationError, 
+  EventAlreadyProcessedError, 
+  ErrorFactory 
+} from '@ecommerce/event-types';
+import { publishOrderCancelled } from '../events/publishers';
 
 export interface CreateOrderRequest {
   userId: string;
@@ -149,6 +157,9 @@ export class OrderService {
 
       order.status = 'CANCELLED';
       await order.save();
+
+      // Publish order.cancelled event
+      publishOrderCancelled(order, 'Cancelled by user');
       
       return { success: true };
     } catch (error) {

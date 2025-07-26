@@ -52,6 +52,13 @@ export class NotificationSeeder {
         variables: ['userName', 'orderId', 'totalPrice']
       },
       {
+        name: 'order_confirmation',
+        type: 'email',
+        subject: 'Order Confirmation - Order #{{orderId}}',
+        content: 'Thank you for your order! Your order #{{orderId}} has been confirmed. Total amount: ${{total}}. You will receive a shipping confirmation soon.',
+        variables: ['orderId', 'total']
+      },
+      {
         name: 'order-failure',
         type: 'email',
         subject: 'Order Failed - We encountered an issue with your order',

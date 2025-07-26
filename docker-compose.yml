@@ -65,7 +65,9 @@ services:
       - "3003:3000"
     depends_on:
       - rabbitmq
+      - mongodb
     environment:
+      - MONGO_URI=mongodb://mongodb:27017/notification_db
       - RABBITMQ_URI=amqp://user:password@rabbitmq:5672
       - PORT=3000
     volumes:
