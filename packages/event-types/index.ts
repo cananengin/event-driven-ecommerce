@@ -34,3 +34,9 @@ export interface OrderStatusUpdatedEvent extends BaseEvent {
 }
 
 export type AppEvent = OrderCreatedEvent | InventoryStatusUpdatedEvent | OrderStatusUpdatedEvent;
+
+// Export error classes
+export * from './errors';
+
+// Export middleware
+export * from './src/middleware';

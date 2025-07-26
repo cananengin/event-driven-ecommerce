@@ -2,16 +2,20 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { config } from './config';
 import { connectRabbitMQ } from './rabbitmq';
-import apiRoutes from './api/routes';
+import routes from './api/routes';
+import { applyErrorHandlers } from '@ecommerce/event-types';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3002;
 
 // Middleware
 app.use(express.json());
 
-// API routes
-app.use('/api', apiRoutes);
+// Routes
+app.use('/api', routes);
+
+// Apply error handlers
+applyErrorHandlers(app);
 
 async function startServer() {
   try {

@@ -1,5 +1,5 @@
 import { Inventory } from '../models/inventory.model';
-import { InventoryStatusUpdatedEvent, OrderCreatedEvent } from '@ecommerce/event-types';
+import { InventoryStatusUpdatedEvent, OrderCreatedEvent, InsufficientInventoryError, ProductNotFoundError, ErrorFactory } from '@ecommerce/event-types';
 
 export interface InventoryCheckResult {
   allAvailable: boolean;
@@ -17,27 +17,46 @@ export class InventoryService {
    * Check if all products in an order have sufficient inventory
    */
   async checkInventoryAvailability(products: Array<{ productId: string; quantity: number }>): Promise<InventoryCheckResult> {
-    for (const item of products) {
-      const inventory = await Inventory.findOne({ productId: item.productId });
-      if (!inventory || inventory.quantity < item.quantity) {
-        return {
-          allAvailable: false,
-          unavailableReason: `Product ${item.productId} is out of stock or insufficient quantity.`
-        };
+    try {
+      for (const item of products) {
+        const inventory = await Inventory.findOne({ productId: item.productId });
+        if (!inventory) {
+          throw new ProductNotFoundError(item.productId);
+        }
+        if (inventory.quantity < item.quantity) {
+          throw new InsufficientInventoryError(item.productId, item.quantity, inventory.quantity);
+        }
       }
+      return { allAvailable: true };
+    } catch (error) {
+      // Re-throw if it's already an EcommerceError
+      if (error instanceof Error && 'code' in error) {
+        throw error;
+      }
+      
+      throw ErrorFactory.database('Failed to check inventory availability', { 
+        products, 
+        error: error instanceof Error ? error.message : String(error) 
+      });
     }
-    return { allAvailable: true };
   }
 
   /**
-   * Deduct inventory for all products in an order
+   * Deduct inventory for products
    */
   async deductInventory(products: Array<{ productId: string; quantity: number }>): Promise<void> {
-    for (const item of products) {
-      await Inventory.updateOne(
-        { productId: item.productId },
-        { $inc: { quantity: -item.quantity } }
-      );
+    try {
+      for (const item of products) {
+        await Inventory.updateOne(
+          { productId: item.productId },
+          { $inc: { quantity: -item.quantity } }
+        );
+      }
+    } catch (error) {
+      throw ErrorFactory.database('Failed to deduct inventory', { 
+        products, 
+        error: error instanceof Error ? error.message : String(error) 
+      });
     }
   }
 
@@ -45,48 +64,93 @@ export class InventoryService {
    * Process an order and return the result
    */
   async processOrder(orderEvent: OrderCreatedEvent): Promise<InventoryUpdateResult> {
-    const { orderId, products } = orderEvent.payload;
-    
-    // Check inventory availability
-    const checkResult = await this.checkInventoryAvailability(products);
-    
-    if (checkResult.allAvailable) {
+    try {
+      const { orderId, products } = orderEvent.payload;
+      
+      // Check inventory availability
+      await this.checkInventoryAvailability(products);
+      
       // Deduct inventory
       await this.deductInventory(products);
+      
       return {
         success: true,
         status: 'SUCCESS'
       };
-    } else {
-      return {
-        success: false,
-        status: 'FAILURE',
-        reason: checkResult.unavailableReason
-      };
+    } catch (error) {
+      console.error('Error processing order:', error);
+      
+      // Re-throw if it's already an EcommerceError
+      if (error instanceof Error && 'code' in error) {
+        const reason = error.message;
+        return {
+          success: false,
+          status: 'FAILURE',
+          reason
+        };
+      }
+      
+      throw ErrorFactory.database('Failed to process order', { 
+        orderId: orderEvent.payload.orderId, 
+        products: orderEvent.payload.products,
+        error: error instanceof Error ? error.message : String(error) 
+      });
     }
   }
 
   /**
-   * Get current inventory for a product
+   * Get inventory for a specific product
    */
-  async getInventory(productId: string): Promise<number> {
-    const inventory = await Inventory.findOne({ productId });
-    return inventory ? inventory.quantity : 0;
+  async getInventory(productId: string): Promise<any> {
+    try {
+      const inventory = await Inventory.findOne({ productId });
+      if (!inventory) {
+        throw new ProductNotFoundError(productId);
+      }
+      return inventory;
+    } catch (error) {
+      // Re-throw if it's already an EcommerceError
+      if (error instanceof Error && 'code' in error) {
+        throw error;
+      }
+      
+      throw ErrorFactory.database('Failed to get inventory', { 
+        productId, 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    }
   }
 
   /**
-   * Add inventory for a product
+   * Add inventory to a product
    */
   async addInventory(productId: string, quantity: number): Promise<void> {
-    await Inventory.updateOne(
-      { productId },
-      { $inc: { quantity } },
-      { upsert: true }
-    );
+    try {
+      const result = await Inventory.updateOne(
+        { productId },
+        { $inc: { quantity } },
+        { upsert: true }
+      );
+      
+      if (result.matchedCount === 0 && result.upsertedCount === 0) {
+        throw new ProductNotFoundError(productId);
+      }
+    } catch (error) {
+      // Re-throw if it's already an EcommerceError
+      if (error instanceof Error && 'code' in error) {
+        throw error;
+      }
+      
+      throw ErrorFactory.database('Failed to add inventory', { 
+        productId, 
+        quantity, 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    }
   }
 
   /**
-   * Get inventory summary for all products
+   * Get inventory summary
    */
   async getInventorySummary(): Promise<{ total: number; products: any[] }> {
     try {
@@ -102,8 +166,9 @@ export class InventoryService {
         }))
       };
     } catch (error) {
-      console.error('Error getting inventory summary:', error);
-      return { total: 0, products: [] };
+      throw ErrorFactory.database('Failed to get inventory summary', { 
+        error: error instanceof Error ? error.message : String(error) 
+      });
     }
   }
 } 

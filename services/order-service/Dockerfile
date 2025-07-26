@@ -1,25 +1,34 @@
 FROM node:18-alpine
+
 WORKDIR /usr/src/app
 
-# Install and build shared event-types package
+# Copy shared package and build it
 COPY packages/event-types /usr/src/packages/event-types
 WORKDIR /usr/src/packages/event-types
 RUN npm install && npm run build
 
-# Install and build service
+# Go back to app directory
 WORKDIR /usr/src/app
+
+# Copy package files
 COPY services/order-service/package.json ./
 COPY services/order-service/package-lock.json ./
+
+# Install dependencies
 RUN npm install --legacy-peer-deps
+
+# Copy source code
 COPY services/order-service/. .
 
-# Copy built event-types to /usr/src/app/event-types for TypeScript path alias
-RUN mkdir -p /usr/src/app/event-types \
-  && cp -r /usr/src/packages/event-types/dist/* /usr/src/app/event-types/ \
-  && cp /usr/src/packages/event-types/package.json /usr/src/app/event-types/ \
-  && cp /usr/src/packages/event-types/dist/index.d.ts /usr/src/app/event-types/
+# Fix: Remove any existing, then create and copy shared package to node_modules
+RUN rm -rf node_modules/@ecommerce/event-types && \
+    mkdir -p node_modules/@ecommerce/event-types && \
+    cp -r /usr/src/packages/event-types/dist/* node_modules/@ecommerce/event-types/ && \
+    cp /usr/src/packages/event-types/package.json node_modules/@ecommerce/event-types/
 
+# Build the application
 RUN npm run build
 
-EXPOSE 3000
-CMD [ "npm", "start" ]
+EXPOSE 3001
+
+CMD ["node", "dist/server.js"]

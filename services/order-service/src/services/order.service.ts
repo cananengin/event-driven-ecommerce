@@ -1,6 +1,6 @@
 import { Order, IOrder } from '../models/order.model';
 import { ProcessedEvent } from '../models/processed-event.model';
-import { OrderCreatedEvent, InventoryStatusUpdatedEvent } from '@ecommerce/event-types';
+import { OrderCreatedEvent, InventoryStatusUpdatedEvent, OrderNotFoundError, OrderCancellationError, EventAlreadyProcessedError, ErrorFactory } from '@ecommerce/event-types';
 
 export interface CreateOrderRequest {
   userId: string;
@@ -39,10 +39,7 @@ export class OrderService {
       };
     } catch (error) {
       console.error('Error creating order:', error);
-      return {
-        success: false,
-        error: 'Failed to create order'
-      };
+      throw ErrorFactory.database('Failed to create order', { orderData, error: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -53,8 +50,8 @@ export class OrderService {
     try {
       return await Order.findById(orderId);
     } catch (error) {
-      console.error('Error getting order:', error);
-      return null;
+      console.error('Error getting order by ID:', error);
+      throw ErrorFactory.database('Failed to retrieve order', { orderId, error: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -68,19 +65,14 @@ export class OrderService {
       // Check if event was already processed (idempotency)
       if (await ProcessedEvent.findOne({ eventId })) {
         console.log(`Event ${eventId} already processed. Skipping.`);
-        return {
-          success: true
-        };
+        throw new EventAlreadyProcessedError(eventId);
       }
 
       console.log(`[v] Received inventory.status.updated for order ${payload.orderId}`);
       
       const order = await Order.findById(payload.orderId);
       if (!order) {
-        return {
-          success: false,
-          error: 'Order not found'
-        };
+        throw new OrderNotFoundError(payload.orderId);
       }
 
       // Update order status based on inventory result
@@ -98,71 +90,80 @@ export class OrderService {
       };
     } catch (error) {
       console.error('Error updating order status:', error);
-      return {
-        success: false,
-        error: 'Failed to update order status'
-      };
+      
+      // Re-throw if it's already an EcommerceError
+      if (error instanceof Error && 'code' in error) {
+        throw error;
+      }
+      
+      throw ErrorFactory.database('Failed to update order status', { 
+        eventId: event.eventId, 
+        orderId: event.payload.orderId,
+        error: error instanceof Error ? error.message : String(error) 
+      });
     }
   }
 
   /**
-   * Get all orders for a user
+   * Get orders by user ID
    */
   async getOrdersByUserId(userId: string): Promise<IOrder[]> {
     try {
       return await Order.find({ userId }).sort({ createdAt: -1 });
     } catch (error) {
-      console.error('Error getting user orders:', error);
-      return [];
+      console.error('Error getting orders by user ID:', error);
+      throw ErrorFactory.database('Failed to retrieve user orders', { userId, error: error instanceof Error ? error.message : String(error) });
     }
   }
 
   /**
-   * Get all orders with optional status filter
+   * Get all orders with optional filters
    */
-  async getOrders(status?: string): Promise<IOrder[]> {
+  async getOrders(filter: { userId?: string; status?: string } = {}): Promise<IOrder[]> {
     try {
-      const filter = status ? { status } : {};
       return await Order.find(filter).sort({ createdAt: -1 });
     } catch (error) {
       console.error('Error getting orders:', error);
-      return [];
+      throw ErrorFactory.database('Failed to retrieve orders', { filter, error: error instanceof Error ? error.message : String(error) });
     }
   }
 
   /**
    * Cancel an order
    */
-  async cancelOrder(orderId: string, userId: string): Promise<UpdateOrderStatusResult> {
+  async cancelOrder(orderId: string, userId: string): Promise<{ success: boolean; error?: string }> {
     try {
       const order = await Order.findOne({ _id: orderId, userId });
+      
       if (!order) {
-        return {
-          success: false,
-          error: 'Order not found or not authorized'
-        };
+        throw new OrderNotFoundError(orderId);
       }
 
       if (order.status === 'CANCELLED') {
-        return {
-          success: false,
-          error: 'Order is already cancelled'
-        };
+        throw new OrderCancellationError(orderId, 'Order is already cancelled');
+      }
+
+      if (order.status === 'CONFIRMED') {
+        throw new OrderCancellationError(orderId, 'Cannot cancel confirmed order');
       }
 
       order.status = 'CANCELLED';
       await order.save();
-
-      return {
-        success: true,
-        order
-      };
+      
+      return { success: true };
     } catch (error) {
       console.error('Error cancelling order:', error);
-      return {
-        success: false,
-        error: 'Failed to cancel order'
-      };
+      
+      // Re-throw if it's already an EcommerceError
+      if (error instanceof Error && 'code' in error) {
+        throw error;
+      }
+      
+      throw ErrorFactory.database('Failed to cancel order', { 
+        orderId, 
+        userId,
+        error: error instanceof Error ? error.message : String(error) 
+      });
     }
   }
 } 
