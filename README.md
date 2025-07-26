@@ -22,6 +22,7 @@ All of this happens automatically, reliably, and can handle thousands of orders 
 ┌─────────────────┐    ┌──────────────────┐    ┌────────────────────┐
 │  Order Service  │    │ Inventory Service│    │ Notification Service│
 │   (Port 3001)   │    │   (Port 3002)    │    │    (Port 3003)     │
+│  (Container:3000)│   │  (Container:3000)│    │   (Container:3000) │
 │                 │    │                  │    │                    │
 │ • Creates orders│    │ • Checks stock   │    │ • Sends emails     │
 │ • Tracks status │    │ • Updates qty    │    │ • SMS notifications│
@@ -59,6 +60,13 @@ All of this happens automatically, reliably, and can handle thousands of orders 
 - **MongoDB** - Flexible database for data persistence
 - **Docker** - Containerization for consistent deployment
 - **Jest** - Testing framework for reliability
+
+### Port Configuration:
+- **Order Service**: Host port 3001 → Container port 3000
+- **Inventory Service**: Host port 3002 → Container port 3000
+- **Notification Service**: Host port 3003 → Container port 3000
+- **RabbitMQ**: Host port 5672 (AMQP), 15672 (Management UI)
+- **MongoDB**: Host port 27017
 
 ## Services
 
@@ -144,6 +152,17 @@ Here's what happens when you order a laptop:
 - Docker and Docker Compose
 - A terminal
 - Basic understanding of microservices
+
+### Environment Setup:
+Each service includes a `.env.example` file that shows the required environment variables. Copy these to `.env` files if you need to customize the configuration:
+
+```bash
+# For local development (optional)
+cp services/order-service/.env.example services/order-service/.env
+cp services/inventory-service/.env.example services/inventory-service/.env
+cp services/notification-service/.env.example services/notification-service/.env
+cp .env.example .env
+```
 
 ### Step 1: Setup
 ```bash
